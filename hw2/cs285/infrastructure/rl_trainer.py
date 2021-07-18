@@ -8,10 +8,10 @@ import gym
 from gym import wrappers
 import numpy as np
 import torch
-from cs285.infrastructure import pytorch_util as ptu
+from hw2.cs285.infrastructure import pytorch_util as ptu
 
-from cs285.infrastructure import utils
-from cs285.infrastructure.logger import Logger
+from hw2.cs285.infrastructure import utils
+from hw2.cs285.infrastructure.logger import Logger
 
 # how many rollouts to save as videos to tensorboard
 from gym.wrappers import Monitor

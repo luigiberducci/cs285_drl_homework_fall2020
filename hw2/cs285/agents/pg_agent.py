@@ -1,8 +1,8 @@
 import numpy as np
 
 from .base_agent import BaseAgent
-from cs285.policies.MLP_policy import MLPPolicyPG
-from cs285.infrastructure.replay_buffer import ReplayBuffer
+from hw2.cs285.policies.MLP_policy import MLPPolicyPG
+from hw2.cs285.infrastructure.replay_buffer import ReplayBuffer
 
 from ..infrastructure import utils
 

@@ -1,8 +1,9 @@
 import os
 import time
 
-from cs285.infrastructure.rl_trainer import RL_Trainer
-from cs285.agents.pg_agent import PGAgent
+from hw2.cs285.agents import PGAgent
+from hw2.cs285.infrastructure.rl_trainer import RL_Trainer
+
 
 class PG_Trainer(object):
 

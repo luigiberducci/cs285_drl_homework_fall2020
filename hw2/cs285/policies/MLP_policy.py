@@ -8,9 +8,9 @@ import numpy as np
 import torch
 from torch import distributions
 
-from cs285.infrastructure import pytorch_util as ptu
-from cs285.policies.base_policy import BasePolicy
-from cs285.infrastructure.utils import normalize
+from hw2.cs285.infrastructure import pytorch_util as ptu
+from hw2.cs285.policies.base_policy import BasePolicy
+from hw2.cs285.infrastructure.utils import normalize
 
 
 class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
@@ -143,9 +143,10 @@ class MLPPolicyPG(MLPPolicy):
         policy = self.forward(observations)
         logprobs = policy.log_prob(actions)
         if not self.discrete:
-            logprobs = torch.squeeze(logprobs)  # continuous returns [B, 1], we need [B]
-        ## avoid any subtle broadcasting bugs that can arise when dealing with arrays of shape
-        ## [ N ] versus shape [ N x 1 ]
+            # it could return [B, A], but we need [B] because of multiplication wt advantages.
+            # When multiple actions p=p_a1*p_a2 -> logp=log p_a1 + log p_a2
+            # Then we sum up the action dimension (1)
+            logprobs = torch.sum(logprobs, 1)
         assert logprobs.shape == advantages.shape
         loss = - torch.sum(logprobs * advantages)
 
@@ -163,7 +164,8 @@ class MLPPolicyPG(MLPPolicy):
             self.baseline_optimizer.zero_grad()
             ## use the `forward` method of `self.baseline` to get baseline predictions
             baseline_predictions = self.baseline.forward(observations)
-            
+            baseline_predictions = torch.squeeze(baseline_predictions)
+
             ## avoid any subtle broadcasting bugs that can arise when dealing with arrays of shape
             ## [ N ] versus shape [ N x 1 ]
             ## HINT: you can use `squeeze` on torch tensors to remove dimensions of size 1

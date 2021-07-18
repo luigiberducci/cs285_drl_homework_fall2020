@@ -1,4 +1,4 @@
-from cs285.infrastructure.utils import *
+from hw2.cs285.infrastructure.utils import *
 
 
 class ReplayBuffer(object):
