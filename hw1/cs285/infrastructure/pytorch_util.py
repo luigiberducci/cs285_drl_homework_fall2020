@@ -5,7 +5,6 @@ from torch import nn
 
 Activation = Union[str, nn.Module]
 
-
 _str_to_activation = {
     'relu': nn.ReLU(),
     'tanh': nn.Tanh(),
@@ -15,6 +14,27 @@ _str_to_activation = {
     'softplus': nn.Softplus(),
     'identity': nn.Identity(),
 }
+
+
+class MlpPolicy(torch.nn.Module):
+    def __init__(self, n_layers, hidden_size, input_size, output_size, hidden_act, output_act):
+        super(MlpPolicy, self).__init__()
+        self.in_layer = nn.Linear(in_features=input_size, out_features=hidden_size)
+        self.hidden_layers = [nn.Linear(in_features=hidden_size, out_features=hidden_size) for _ in range(n_layers)]
+        self.hidden_layers = nn.ModuleList(self.hidden_layers)
+        self.out_layer = nn.Linear(in_features=hidden_size, out_features=output_size)
+        self.hidden_activation = hidden_act
+        self.out_activation = output_act
+
+    def forward(self, x):
+        x = self.in_layer(x)
+        x = self.hidden_activation(x)
+        for hlayer in self.hidden_layers:
+            x = hlayer(x)
+            x = self.hidden_activation(x)
+        x = self.out_layer(x)
+        x = self.out_activation(x)
+        return x
 
 
 def build_mlp(
@@ -44,10 +64,8 @@ def build_mlp(
         activation = _str_to_activation[activation]
     if isinstance(output_activation, str):
         output_activation = _str_to_activation[output_activation]
-
-    # TODO: return a MLP. This should be an instance of nn.Module
-    # Note: nn.Sequential is an instance of nn.Module.
-    raise NotImplementedError
+    mlp = MlpPolicy(n_layers, size, input_size, output_size, activation, output_activation)
+    return mlp
 
 
 device = None

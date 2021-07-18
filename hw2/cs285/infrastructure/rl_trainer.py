@@ -14,8 +14,10 @@ from cs285.infrastructure import utils
 from cs285.infrastructure.logger import Logger
 
 # how many rollouts to save as videos to tensorboard
+from gym.wrappers import Monitor
+
 MAX_NVIDEO = 2
-MAX_VIDEO_LEN = 40 # we overwrite this in the code below
+MAX_VIDEO_LEN = 40  # we overwrite this in the code below
 
 
 class RL_Trainer(object):
@@ -45,10 +47,11 @@ class RL_Trainer(object):
 
         # Make the gym environment
         self.env = gym.make(self.params['env_name'])
+        #self.env = Monitor(self.env, f"{self.params['logdir']}/videos", force=True)
         self.env.seed(seed)
 
         # import plotting (locally if 'obstacles' env)
-        if not(self.params['env_name']=='obstacles-cs285-v0'):
+        if not (self.params['env_name'] == 'obstacles-cs285-v0'):
             import matplotlib
             matplotlib.use('Agg')
 
@@ -73,14 +76,13 @@ class RL_Trainer(object):
 
         # simulation timestep, will be used for video saving
         if 'model' in dir(self.env):
-            self.fps = 1/self.env.model.opt.timestep
+            self.fps = 1 / self.env.model.opt.timestep
         elif 'env_wrappers' in self.params:
-            self.fps = 30 # This is not actually used when using the Monitor wrapper
+            self.fps = 30  # This is not actually used when using the Monitor wrapper
         elif 'video.frames_per_second' in self.env.env.metadata.keys():
             self.fps = self.env.env.metadata['video.frames_per_second']
         else:
             self.fps = 10
-
 
         #############
         ## AGENT
@@ -107,7 +109,7 @@ class RL_Trainer(object):
         self.start_time = time.time()
 
         for itr in range(n_iter):
-            print("\n\n********** Iteration %i ************"%itr)
+            print("\n\n********** Iteration %i ************" % itr)
 
             # decide if videos should be rendered/logged at this iteration
             if itr % self.params['video_log_freq'] == 0 and self.params['video_log_freq'] != -1:
@@ -126,8 +128,8 @@ class RL_Trainer(object):
 
             # collect trajectories, to be used for training
             training_returns = self.collect_training_trajectories(itr,
-                                initial_expertdata, collect_policy,
-                                self.params['batch_size'])
+                                                                  initial_expertdata, collect_policy,
+                                                                  self.params['batch_size'])
             paths, envsteps_this_batch, train_video_paths = training_returns
             self.total_envsteps += envsteps_this_batch
 
@@ -150,13 +152,55 @@ class RL_Trainer(object):
     ####################################
 
     def collect_training_trajectories(self, itr, load_initial_expertdata, collect_policy, batch_size):
-        # TODO: get this from hw1
         # if your load_initial_expertdata is None, then you need to collect new trajectories at *every* iteration
+        """
+                :param itr:
+                :param load_initial_expertdata:  path to expert data pkl file
+                :param collect_policy:  the current policy using which we collect data
+                :param batch_size:  the number of transitions we collect
+                :return:
+                    paths: a list trajectories
+                    envsteps_this_batch: the sum over the numbers of environment steps in paths
+                    train_video_paths: paths which also contain videos for visualization purposes
+                """
+        if load_initial_expertdata and itr == 0:  # if first iteration, return expert data
+            import pickle
+            with open(load_initial_expertdata, 'rb') as file:
+                loaded_paths = pickle.load(file)
+            return loaded_paths, 0, None
+        # otherwise, sample `batch_size` samples for training
+        # Hint: use sample_trajectories in utils
+        print("\nCollecting data to be used for training...")
+        max_path_length = self.params['ep_len']
+        paths, envsteps_this_batch = utils.sample_trajectories(self.env, collect_policy, batch_size, max_path_length)
+
+        # collect more rollouts with the same policy, to be saved as videos in tensorboard
+        # note: here, we collect MAX_NVIDEO rollouts, each of length MAX_VIDEO_LEN
+        train_video_paths = None
+        if self.log_video:
+            print('\nCollecting train rollouts to be used for saving videos...')
+            ## look in utils and implement sample_n_trajectories
+            train_video_paths = utils.sample_n_trajectories(self.env, collect_policy, MAX_NVIDEO, MAX_VIDEO_LEN,
+                                                            render=True)
+
         return paths, envsteps_this_batch, train_video_paths
 
     def train_agent(self):
-        # TODO: get this from hw1
-        return train_logs
+        print('\nTraining agent using sampled data from replay buffer...')
+        all_logs = []
+        for train_step in range(self.params['num_agent_train_steps_per_iter']):
+            # sample some data from the data buffer
+            # HINT1: use the agent's sample function
+            # HINT2: how much data = self.params['train_batch_size']
+            samples = self.agent.sample(self.params['train_batch_size'])
+            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = samples
+
+            # use the sampled data to train an agent
+            # HINT: use the agent's train function
+            # HINT: keep the agent's training log for debugging
+            train_log = self.agent.train(ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch)
+            all_logs.append(train_log)
+        return all_logs
 
     ####################################
     ####################################
@@ -169,19 +213,23 @@ class RL_Trainer(object):
 
         # collect eval trajectories, for logging
         print("\nCollecting data for eval...")
-        eval_paths, eval_envsteps_this_batch = utils.sample_trajectories(self.env, eval_policy, self.params['eval_batch_size'], self.params['ep_len'])
+        eval_paths, eval_envsteps_this_batch = utils.sample_trajectories(self.env, eval_policy,
+                                                                         self.params['eval_batch_size'],
+                                                                         self.params['ep_len'])
 
         # save eval rollouts as videos in tensorboard event file
         if self.logvideo and train_video_paths != None:
             print('\nCollecting video rollouts eval')
-            eval_video_paths = utils.sample_n_trajectories(self.env, eval_policy, MAX_NVIDEO, MAX_VIDEO_LEN, True)
+            eval_video_paths = utils.sample_n_trajectories(self.env, eval_policy, MAX_NVIDEO, MAX_VIDEO_LEN,
+                                                           render=True)
 
-            #save train/eval videos
+            # save train/eval videos
             print('\nSaving train rollouts as videos...')
+            # problem with saving videos with mujoco (rgb_array mode)
             self.logger.log_paths_as_videos(train_video_paths, itr, fps=self.fps, max_videos_to_save=MAX_NVIDEO,
                                             video_title='train_rollouts')
-            self.logger.log_paths_as_videos(eval_video_paths, itr, fps=self.fps,max_videos_to_save=MAX_NVIDEO,
-                                             video_title='eval_rollouts')
+            self.logger.log_paths_as_videos(eval_video_paths, itr, fps=self.fps, max_videos_to_save=MAX_NVIDEO,
+                                            video_title='eval_rollouts')
 
         #######################
 
@@ -224,4 +272,3 @@ class RL_Trainer(object):
             print('Done logging...\n\n')
 
             self.logger.flush()
-
