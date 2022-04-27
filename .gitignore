@@ -4,3 +4,4 @@
 venv*
 *MUJOCO_LOG*
 .*
+/hw1/videos/
