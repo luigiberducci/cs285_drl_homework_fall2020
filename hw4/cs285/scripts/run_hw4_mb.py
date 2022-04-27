@@ -1,8 +1,8 @@
 import os
 import time
 
-from cs285.infrastructure.rl_trainer import RL_Trainer
-from cs285.agents.mb_agent import MBAgent
+from hw4.cs285.infrastructure.rl_trainer import RL_Trainer
+from hw4.cs285.agents.mb_agent import MBAgent
 
 
 class MB_Trainer(object):

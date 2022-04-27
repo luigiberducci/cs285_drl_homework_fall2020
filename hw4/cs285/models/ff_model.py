@@ -1,9 +1,9 @@
 from torch import nn
 import torch
 from torch import optim
-from cs285.models.base_model import BaseModel
-from cs285.infrastructure.utils import normalize, unnormalize
-from cs285.infrastructure import pytorch_util as ptu
+from hw4.cs285.models.base_model import BaseModel
+from hw4.cs285.infrastructure.utils import normalize, unnormalize
+from hw4.cs285.infrastructure import pytorch_util as ptu
 
 
 class FFModel(nn.Module, BaseModel):
@@ -16,12 +16,16 @@ class FFModel(nn.Module, BaseModel):
         self.n_layers = n_layers
         self.size = size
         self.learning_rate = learning_rate
+
+        # delta network: predicts the change in state, fomrally D_{t+1} = f(s_t, a_t)
+        # for the rationale behind it: read https://arxiv.org/pdf/1708.02596.pdf
         self.delta_network = ptu.build_mlp(
             input_size=self.ob_dim + self.ac_dim,
             output_size=self.ob_dim,
             n_layers=self.n_layers,
             size=self.size,
         )
+
         self.delta_network.to(ptu.device)
         self.optimizer = optim.Adam(
             self.delta_network.parameters(),
@@ -77,18 +81,21 @@ class FFModel(nn.Module, BaseModel):
             2. `delta_pred_normalized` which is the normalized (i.e. not
                 unnormalized) output of the delta network. This is needed
         """
+        self.update_statistics(obs_mean, obs_std, acs_mean, acs_std, delta_mean, delta_std)
+        obs_unnormalized = ptu.from_numpy(obs_unnormalized)
+        acs_unnormalized = ptu.from_numpy(acs_unnormalized)
+
         # normalize input data to mean 0, std 1
-        obs_normalized = # TODO(Q1)
-        acs_normalized = # TODO(Q1)
+        obs_normalized = normalize(obs_unnormalized, self.obs_mean, self.obs_std)
+        acs_normalized = normalize(acs_unnormalized, self.acs_mean, self.acs_std)
 
         # predicted change in obs
         concatenated_input = torch.cat([obs_normalized, acs_normalized], dim=1)
 
-        # TODO(Q1) compute delta_pred_normalized and next_obs_pred
         # Hint: as described in the PDF, the output of the network is the
         # *normalized change* in state, i.e. normalized(s_t+1 - s_t).
-        delta_pred_normalized = # TODO(Q1)
-        next_obs_pred = # TODO(Q1)
+        delta_pred_normalized = self.delta_network(concatenated_input)
+        next_obs_pred = obs_unnormalized + unnormalize(delta_pred_normalized, self.delta_mean, self.delta_std)
         return next_obs_pred, delta_pred_normalized
 
     def get_prediction(self, obs, acs, data_statistics):
@@ -105,10 +112,8 @@ class FFModel(nn.Module, BaseModel):
              - 'delta_std'
         :return: a numpy array of the predicted next-states (s_t+1)
         """
-        prediction = # TODO(Q1) get numpy array of the predicted next-states (s_t+1)
-        # Hint: `self(...)` returns a tuple, but you only need to use one of the
-        # outputs.
-        return prediction
+        prediction, delta_pred_normalized = self.forward(obs, acs, **data_statistics)
+        return ptu.to_numpy(prediction)
 
     def update(self, observations, actions, next_observations, data_statistics):
         """
@@ -125,12 +130,14 @@ class FFModel(nn.Module, BaseModel):
              - 'delta_std'
         :return:
         """
-        target = # TODO(Q1) compute the normalized target for the model.
+        target = (next_observations - observations - data_statistics["delta_mean"]) / data_statistics["delta_std"]
+        target = ptu.from_numpy(target)
         # Hint: you should use `data_statistics['delta_mean']` and
         # `data_statistics['delta_std']`, which keep track of the mean
         # and standard deviation of the model.
 
-        loss = # TODO(Q1) compute the loss
+        prediction, delta_pred_normalized = self.forward(observations, actions, **data_statistics)
+        loss = torch.mean((target - delta_pred_normalized) ** 2)
         # Hint: `self(...)` returns a tuple, but you only need to use one of the
         # outputs.
 
