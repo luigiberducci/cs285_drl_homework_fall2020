@@ -35,7 +35,8 @@ class MPCPolicy(BasePolicy):
         # uniformly sample trajectories and return an array of
         # dimensions (num_sequences, horizon, self.ac_dim) in the range
         # [self.low, self.high]
-        random_action_sequences = self.low + np.random.rand(num_sequences, horizon, self.ac_dim) * (self.high - self.low)
+        random_action_sequences = self.low + np.random.rand(num_sequences, horizon, self.ac_dim) * (
+                    self.high - self.low)
         return random_action_sequences
 
     def get_action(self, obs):
@@ -60,8 +61,8 @@ class MPCPolicy(BasePolicy):
             predicted_sum_of_rewards_per_model, axis=0)  # [ens, N] --> N
 
         # pick the action sequence and return the 1st element of that sequence
-        best_action_sequence = None  # TODO (Q2)
-        action_to_take = None  # TODO (Q2)
+        best_action_sequence = candidate_action_sequences[np.argmax(predicted_rewards)]
+        action_to_take = best_action_sequence[0]
         return action_to_take[None]  # Unsqueeze the first index
 
     def calculate_sum_of_rewards(self, obs, candidate_action_sequences, model):
@@ -77,16 +78,15 @@ class MPCPolicy(BasePolicy):
         :return: numpy array with the sum of rewards for each action sequence.
         The array should have shape [N].
         """
-        sum_of_rewards = None  # TODO (Q2)
-        # For each candidate action sequence, predict a sequence of
-        # states for each dynamics model in your ensemble.
-        # Once you have a sequence of predicted states from each model in
-        # your ensemble, calculate the sum of rewards for each sequence
-        # using `self.env.get_reward(predicted_obs)`
-        # You should sum across `self.horizon` time step.
-        # Hint: you should use model.get_prediction and you shouldn't need
-        #       to import pytorch in this file.
-        # Hint: Remember that the model can process observations and actions
-        #       in batch, which can be much faster than looping through each
-        #       action sequence.
+        # unpack batch size N and horizon H
+        N, H = candidate_action_sequences.shape[:2]
+        # initialize batch of reward
+        sum_of_rewards = np.zeros(N)
+        obs = np.repeat(obs[None], repeats=N, axis=0)   # repeat the single observation to exploit batch parallelization
+        for h in range(H):
+            acs = candidate_action_sequences[:, h, :]
+            predicted_obs = model.get_prediction(obs, acs, self.data_statistics)    # predict next observations
+            rewards, dones = self.env.get_reward(predicted_obs, acs)                # use ground-truth reward model
+            sum_of_rewards += rewards                                               # sum up rewards
+            obs = predicted_obs
         return sum_of_rewards
