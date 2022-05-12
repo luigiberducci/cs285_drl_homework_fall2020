@@ -17,8 +17,8 @@ See [installation](hw1/installation.md) instruction to setup environment.
   - [ ] Experiments
   - [ ] Documentation
 - [ ] HW4: Model-Based Reinforcement Learning
-  - [ ] Implementation
-  - [ ] Experiments
+  - [x] Implementation
+  - [x] Experiments
   - [ ] Documentation
 - [ ] HW5: Exploration and Offline Reinforcement Learning
   - [ ] Implementation
